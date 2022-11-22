@@ -1,4 +1,7 @@
 import java.io.*;
+import java.util.*;
+import java.lang.*;
+
 
 /**
  * This is the class that students need to implement. The code skeleton is provided.
@@ -13,14 +16,70 @@ public class Node {
     int[] lkcost;		/*The link cost between this node and other nodes*/
     int[][] costs;  		/*Define distance table*/
     int nodename;               /*Name of this node*/
-    
+		int[] direct_lkcost;
+    List<Integer> boardcasted = new ArrayList<>();
+		int nextboardcast;
     /* Class constructor */
     public Node() { }
     
     /* students to write the following two routines, and maybe some others */
-    void rtinit(int nodename, int[] initial_lkcost) { }    
+    void rtinit(int nodename, int[] initial_lkcost) { 
+			this.nodename = nodename;
+      this.costs = new int[4][4];
+			this.lkcost = initial_lkcost;
+			this.direct_lkcost = this.lkcost;
+			this.nextboardcast = this.nodename;
+			for (int x = 0; x < 4; x++){
+				System.out.println(this.nodename + ":   "+ this.lkcost[x]);
+				for (int y = 0; y < 4; y++){
+					this.costs[x][y] = 9999;
+					if (x == y){
+						this.costs[x][y] = this.lkcost[x];
+					}
+				}
+			}
+
+			for (int i = 0; i < 4; i++){
+				if (this.nodename != i && this.lkcost[i] != 9999){
+					NetworkSimulator.tolayer2(new Packet(this.nodename, i, this.nodename, this.lkcost, nextboardcast));
+				}
+			}
+			this.boardcasted.add(this.nextboardcast);
+		}    
     
-    void rtupdate(Packet rcvdpkt) {  }
+    void rtupdate(Packet rcvdpkt) { 
+			if (this.boardcasted.contains(rcvdpkt.seqNo)){
+				return;
+			}
+			this.boardcasted.add(rcvdpkt.seqNo);
+
+			//See if there is any change of lkcost.
+			boolean changed = false;
+
+			//Update costs
+			for (int x = 0; x < 4; x++){
+				this.costs[x][rcvdpkt.sourceid] = this.direct_lkcost[rcvdpkt.sourceid] + rcvdpkt.mincost[x];
+			}
+
+			//Update lkcost
+			for (int i = 0; i< 4; i++){
+				if (this.costs[i][rcvdpkt.sourceid] < this.lkcost[i]){
+					changed = true;
+				}
+				this.lkcost[i] = Math.min(this.lkcost[i], this.costs[i][rcvdpkt.sourceid]);
+			}
+			
+			//Boardcast if there is a change.
+			if (changed){
+				nextboardcast += 4;
+				for (int i = 0; i < 4; i++){
+					if (this.nodename != i && this.lkcost[i] <= 9999){
+						NetworkSimulator.tolayer2(new Packet(this.nodename, i, this.nodename, this.lkcost, nextboardcast));
+					}
+				}
+				this.boardcasted.add(this.nextboardcast);
+			}
+		}
     
     
     /* called when cost from the node to linkid changes from current value to newcost*/
