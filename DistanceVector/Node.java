@@ -19,6 +19,7 @@ public class Node {
 		int[] direct_lkcost;
     List<Integer> boardcasted = new ArrayList<>();
 		int nextboardcast;
+		List<Integer> neighbors = new ArrayList<>();
     /* Class constructor */
     public Node() { }
     
@@ -29,8 +30,16 @@ public class Node {
 			this.lkcost = initial_lkcost;
 			this.direct_lkcost = this.lkcost;
 			this.nextboardcast = this.nodename;
+			//Initialize neighbors.
 			for (int x = 0; x < 4; x++){
-				System.out.println(this.nodename + ":   "+ this.lkcost[x]);
+				if (this.lkcost[x] != 9999){
+					this.neighbors.add(x);
+				}
+			}
+
+			//Initialize entry table.
+			for (int x = 0; x < 4; x++){
+				// System.out.println(this.nodename + ":   "+ this.lkcost[x]);
 				for (int y = 0; y < 4; y++){
 					this.costs[x][y] = 9999;
 					if (x == y){
@@ -39,20 +48,16 @@ public class Node {
 				}
 			}
 
+			//Boardcasting.
 			for (int i = 0; i < 4; i++){
 				if (this.nodename != i && this.lkcost[i] != 9999){
-					NetworkSimulator.tolayer2(new Packet(this.nodename, i, this.nodename, this.lkcost, nextboardcast));
+					NetworkSimulator.tolayer2(new Packet(this.nodename, i, this.lkcost));
 				}
 			}
 			this.boardcasted.add(this.nextboardcast);
 		}    
     
     void rtupdate(Packet rcvdpkt) { 
-			if (this.boardcasted.contains(rcvdpkt.seqNo)){
-				return;
-			}
-			this.boardcasted.add(rcvdpkt.seqNo);
-
 			//See if there is any change of lkcost.
 			boolean changed = false;
 
@@ -68,17 +73,23 @@ public class Node {
 				}
 				this.lkcost[i] = Math.min(this.lkcost[i], this.costs[i][rcvdpkt.sourceid]);
 			}
-			
+
 			//Boardcast if there is a change.
 			if (changed){
 				nextboardcast += 4;
 				for (int i = 0; i < 4; i++){
-					if (this.nodename != i && this.lkcost[i] <= 9999){
-						NetworkSimulator.tolayer2(new Packet(this.nodename, i, this.nodename, this.lkcost, nextboardcast));
+					if (this.nodename != i && this.neighbors.contains(i) && i != rcvdpkt.sourceid){
+						NetworkSimulator.tolayer2(new Packet(this.nodename, i, this.lkcost));
 					}
 				}
 				this.boardcasted.add(this.nextboardcast);
 			}
+
+			// if (this.nodename == 0){
+			// 	for (int x = 0; x <4; x++){
+			// 		System.out.println("After reciving packet from: "+rcvdpkt.sourceid+"   "+this.nodename + ": " + this.lkcost[x]);
+			// 	}
+			// }
 		}
     
     
