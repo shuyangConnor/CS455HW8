@@ -17,29 +17,47 @@ public class Node {
     int[][] costs;  		/*Define distance table*/
     int nodename;               /*Name of this node*/
 		int[] direct_lkcost;
-    List<Integer> boardcasted = new ArrayList<>();
-		int nextboardcast;
+		int[] position_reverse;
 		List<Integer> neighbors = new ArrayList<>();
     /* Class constructor */
     public Node() { }
     
+	 int[] smallestInRow(int[] row){
+		int minimum = row[0];
+		int index = 0;
+		for (int x = 0; x < row.length; x++){
+			if (row[x] < minimum){
+				minimum = row[x];
+				index=x;
+			}
+		}
+		int[]result = new int[2];
+		result[0] = minimum;
+		result[1] = index;
+		return result;
+	 }
+
     /* students to write the following two routines, and maybe some others */
     void rtinit(int nodename, int[] initial_lkcost) { 
 			this.nodename = nodename;
       this.costs = new int[4][4];
 			this.lkcost = initial_lkcost;
-			this.direct_lkcost = this.lkcost;
-			this.nextboardcast = this.nodename;
+			this.direct_lkcost = this.lkcost.clone();
+			this.position_reverse = new int[4];
+			
 			//Initialize neighbors.
 			for (int x = 0; x < 4; x++){
 				if (this.lkcost[x] != 9999){
 					this.neighbors.add(x);
+					this.position_reverse[x]=x;
+				}
+				else {
+					this.position_reverse[x] = -1;
 				}
 			}
 
 			//Initialize entry table.
 			for (int x = 0; x < 4; x++){
-				// System.out.println(this.nodename + ":   "+ this.lkcost[x]);
 				for (int y = 0; y < 4; y++){
 					this.costs[x][y] = 9999;
 					if (x == y){
@@ -50,11 +68,10 @@ public class Node {
 
 			//Boardcasting.
 			for (int i = 0; i < 4; i++){
-				if (this.nodename != i && this.lkcost[i] != 9999){
+				if (this.nodename != i && this.lkcost[i] < 9999){
 					NetworkSimulator.tolayer2(new Packet(this.nodename, i, this.lkcost));
 				}
 			}
-			this.boardcasted.add(this.nextboardcast);
 		}    
     
     void rtupdate(Packet rcvdpkt) { 
@@ -64,37 +81,79 @@ public class Node {
 			//Update costs
 			for (int x = 0; x < 4; x++){
 				this.costs[x][rcvdpkt.sourceid] = this.direct_lkcost[rcvdpkt.sourceid] + rcvdpkt.mincost[x];
+				if (this.costs[x][rcvdpkt.sourceid] > 9999){
+					this.costs[x][rcvdpkt.sourceid] = 9999;
+				}
 			}
 
 			//Update lkcost
 			for (int i = 0; i< 4; i++){
-				if (this.costs[i][rcvdpkt.sourceid] < this.lkcost[i]){
+				int min = smallestInRow(this.costs[i])[0];
+				if (min != this.lkcost[i]){
+					this.position_reverse[i] = smallestInRow(this.costs[i])[1];
+					this.lkcost[i] = Math.min(this.lkcost[i], min);
 					changed = true;
 				}
-				this.lkcost[i] = Math.min(this.lkcost[i], this.costs[i][rcvdpkt.sourceid]);
 			}
 
 			//Boardcast if there is a change.
 			if (changed){
-				nextboardcast += 4;
 				for (int i = 0; i < 4; i++){
-					if (this.nodename != i && this.neighbors.contains(i) && i != rcvdpkt.sourceid){
-						NetworkSimulator.tolayer2(new Packet(this.nodename, i, this.lkcost));
+					if (this.nodename != i && this.neighbors.contains(i)){
+						int[] sndpkt = new int[4];
+						for(int j = 0; j < 4; j++) {
+    					if(position_reverse[j] == i) {
+    						sndpkt[j] = 9999;
+    					}
+    					else {
+    						sndpkt[j] = this.lkcost[j];
+    					}
+    				}
+						NetworkSimulator.tolayer2(new Packet(this.nodename, i, sndpkt));
 					}
 				}
-				this.boardcasted.add(this.nextboardcast);
 			}
-
-			// if (this.nodename == 0){
-			// 	for (int x = 0; x <4; x++){
-			// 		System.out.println("After reciving packet from: "+rcvdpkt.sourceid+"   "+this.nodename + ": " + this.lkcost[x]);
-			// 	}
-			// }
 		}
     
     
     /* called when cost from the node to linkid changes from current value to newcost*/
-    void linkhandler(int linkid, int newcost) {  }    
+    void linkhandler(int linkid, int newcost) { 
+			this.direct_lkcost[linkid] = newcost;
+			int oldlkcost;
+			int lowest;
+			boolean changed = false;
+			int oldcost = this.costs[linkid][linkid];
+			for (int x = 0; x < 4; x++){
+				this.costs[x][linkid] = this.costs[x][linkid] - oldcost + newcost;
+				if (this.costs[x][linkid] > 9999){
+					this.costs[x][linkid] = 9999;
+				}
+				oldlkcost = this.lkcost[x];
+				lowest = smallestInRow(this.costs[x])[0];
+				if (lowest != oldlkcost){
+					this.position_reverse[x] = smallestInRow(this.costs[x])[1];
+					this.lkcost[x] = lowest;
+					changed = true;
+				}
+			}
+			if (changed){
+				for (int i = 0; i < 4; i++){
+					if (this.nodename != i && this.neighbors.contains(i)){
+						int[] sndpkt = new int[4];
+						for(int j = 0; j < 4; j++) {
+    					if(position_reverse[j] == i) {
+    						sndpkt[j] = 9999;
+    					}
+    					else {
+    						sndpkt[j] = this.lkcost[j];
+    					}
+    				}
+						NetworkSimulator.tolayer2(new Packet(this.nodename, i, sndpkt));
+					}
+				}
+			}
+			printdt();
+		}
 
 
     /* Prints the current costs to reaching other nodes in the network */
